@@ -441,7 +441,7 @@ class JointDataset(LoadImagesAndLabels):  # for training
         draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else draw_umich_gaussian
         for k in range(num_objs):
             label = labels[k]
-            bbox = label[2:]
+            bbox = label[2:6]
             cls_id = int(label[0])
             bbox[[0, 2]] = bbox[[0, 2]] * output_w
             bbox[[1, 3]] = bbox[[1, 3]] * output_h
@@ -481,7 +481,7 @@ class JointDataset(LoadImagesAndLabels):  # for training
                 ids[k] = label[1]
                 bbox_xys[k] = bbox_xy
 
-        ret = {'input': imgs, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'reg': reg, 'ids': ids, 'bbox': bbox_xys}
+        ret = {'input': imgs, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'reg': reg, 'ids': ids, 'bbox': bbox_xys, 'colors': labels[:, -9:]}
         return ret
 
 

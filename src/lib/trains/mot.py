@@ -31,13 +31,14 @@ class MotLoss(torch.nn.Module):
         self.nID = opt.nID
         self.classifier = nn.Linear(self.emb_dim, self.nID)
         self.IDLoss = nn.CrossEntropyLoss(ignore_index=-1)
+        self.colorLoss = torch.nn.MSELoss()
         self.emb_scale = math.sqrt(2) * math.log(self.nID - 1)
         self.s_det = nn.Parameter(-1.85 * torch.ones(1))
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
 
     def forward(self, outputs, batch):
         opt = self.opt
-        hm_loss, wh_loss, off_loss, id_loss = 0, 0, 0, 0
+        hm_loss, wh_loss, off_loss, id_loss, color_loss = 0, 0, 0, 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
@@ -61,14 +62,14 @@ class MotLoss(torch.nn.Module):
 
                 id_output = self.classifier(id_head).contiguous()
                 id_loss += self.IDLoss(id_output, id_target)
-
+            color_loss+= self.colorLoss(output['colors'], batch['colors'])
         det_loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss
 
-        loss = torch.exp(-self.s_det) * det_loss + torch.exp(-self.s_id) * id_loss + (self.s_det + self.s_id)
+        loss = torch.exp(-self.s_det) * det_loss + torch.exp(-self.s_id) * id_loss + (self.s_det + self.s_id) + color_loss
         loss *= 0.5
 
         loss_stats = {'loss': loss, 'hm_loss': hm_loss,
-                      'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss}
+                      'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss, 'color_loss': color_loss}
         return loss, loss_stats
 
 
@@ -77,7 +78,7 @@ class MotTrainer(BaseTrainer):
         super(MotTrainer, self).__init__(opt, model, optimizer=optimizer)
 
     def _get_losses(self, opt):
-        loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss', 'id_loss']
+        loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss', 'id_loss', 'color_loss']
         loss = MotLoss(opt)
         return loss_states, loss
 

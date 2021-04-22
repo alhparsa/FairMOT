@@ -424,6 +424,10 @@ class Interpolate(nn.Module):
         return x
 
 
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
+
 class DLASeg(nn.Module):
     def __init__(self, base_name, heads, pretrained, down_ratio, final_kernel,
                  last_level, head_conv, out_channel=0):
@@ -446,17 +450,34 @@ class DLASeg(nn.Module):
         for head in self.heads:
             classes = self.heads[head]
             if head_conv > 0:
-              fc = nn.Sequential(
+                fc = nn.Sequential(
                   nn.Conv2d(channels[self.first_level], head_conv,
                     kernel_size=3, padding=1, bias=True),
-                  nn.ReLU(inplace=True),
+                    nn.ReLU(inplace=True),
                   nn.Conv2d(head_conv, classes, 
                     kernel_size=final_kernel, stride=1, 
                     padding=final_kernel // 2, bias=True))
-              if 'hm' in head:
-                fc[-1].bias.data.fill_(-2.19)
-              else:
-                fill_fc_weights(fc)
+                if 'hm' in head:
+                    fc[-1].bias.data.fill_(-2.19)
+                else:
+                    if 'id' in head:
+                        fc = nn.Sequential(
+                            nn.Conv2d(channels[self.first_level], head_conv,
+                            kernel_size=3, padding=1, bias=True),
+                            nn.ReLU(inplace=True),
+                            nn.Conv2d(head_conv, classes, 
+                            kernel_size=final_kernel, stride=1, 
+                            padding=final_kernel // 2, bias=True),
+                        )
+                        size = Flatten().forward(fc).size()
+                        colors = nn.Sequential(
+                            fc,
+                            Flatten(),
+                            nn.Linear(size, 9)
+                        )
+                        fill_fc_weights(colors)
+                        self.__setattr__('colors', colors)
+                    fill_fc_weights(fc)
             else:
               fc = nn.Conv2d(channels[self.first_level], classes, 
                   kernel_size=final_kernel, stride=1, 
@@ -479,6 +500,7 @@ class DLASeg(nn.Module):
         z = {}
         for head in self.heads:
             z[head] = self.__getattr__(head)(y[-1])
+        z['colors'] = self.__getattr__('colors')(y[-1])
         return [z]
     
 
